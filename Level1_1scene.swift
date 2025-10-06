@@ -1,0 +1,172 @@
+import SpriteKit
+
+class level1_1scene: SKScene {
+    var player: SKSpriteNode!
+    var walkFrames: [SKTexture] = []
+    var ground: SKSpriteNode!
+    var background: SKSpriteNode!
+    
+    var button: SKSpriteNode!
+    var buttonActive = false
+    
+    var destination: CGPoint?
+    var movingToButton = false
+    let playerSpeed: CGFloat = 150.0
+    
+    var textLabel: SKLabelNode!                // Label at top for typewriter text
+    var typingWorkItem: DispatchWorkItem?      // To cancel ongoing typing
+    
+    // How long the button stays active
+    let buttonActiveDuration: TimeInterval = 3.0
+    
+    override func didMove(to view: SKView) {
+        // Background
+        background = SKSpriteNode(imageNamed: "Level1_2.png")
+        background.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        background.size = self.size
+        background.zPosition = -1
+        addChild(background)
+        
+        // Ground
+        ground = SKSpriteNode(color: .brown, size: CGSize(width: size.width, height: 40))
+        ground.position = CGPoint(x: size.width / 2, y: ground.size.height / 2)
+        ground.physicsBody = SKPhysicsBody(rectangleOf: ground.size)
+        ground.physicsBody?.isDynamic = false
+        addChild(ground)
+        
+        // Walk cycle
+        let walkAtlas = SKTextureAtlas(named: "WalkCycle")
+        for i in 1...6 {
+            walkFrames.append(walkAtlas.textureNamed("oWalk\(i)"))
+        }
+        
+        // Player
+        player = SKSpriteNode(imageNamed: "stand1")
+        player.size = CGSize(width: 120, height: 120)
+        player.position = CGPoint(x: size.width * 0.1,
+                        y: ground.position.y + ground.size.height / 2 + player.size.height / 2)
+        player.physicsBody = SKPhysicsBody(rectangleOf: player.size)
+        player.physicsBody?.allowsRotation = false
+        player.physicsBody?.restitution = 0.0
+        player.physicsBody?.friction = 1.0
+        addChild(player)
+        
+        // Button
+        button = SKSpriteNode(color: .red, size: CGSize(width: 80, height: 40))
+        button.position = CGPoint(x: 200, y: 100)
+        button.name = "button"
+        addChild(button)
+        
+        // Label for typewriter text at top center
+        textLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
+        textLabel.fontSize = 24
+        textLabel.fontColor = .white
+        textLabel.position = CGPoint(x: size.width / 2, y: size.height - 50)
+        textLabel.horizontalAlignmentMode = .center
+        textLabel.zPosition = 10
+        addChild(textLabel)
+    }
+    
+    override func mouseDown(with event: NSEvent) {
+        let location = event.location(in: self)
+        
+        if button.contains(location) && !buttonActive {
+            // Player moves toward button automatically
+            destination = CGPoint(x: button.position.x, y: player.position.y)
+            movingToButton = true
+            button.color = .orange // indicate waiting for player
+            startWalkingAnimation()
+        } else {
+            // Normal walk movement
+            destination = CGPoint(x: location.x, y: player.position.y)
+            movingToButton = false
+            startWalkingAnimation()
+        }
+    }
+    
+    func startWalkingAnimation() {
+        if player.action(forKey: "walking") == nil {
+            let walkAnimation = SKAction.animate(with: walkFrames, timePerFrame: 0.15)
+            let walkForever = SKAction.repeatForever(walkAnimation)
+            player.run(walkForever, withKey: "walking")
+        }
+    }
+    
+    func stopWalkingAnimation() {
+        player.removeAction(forKey: "walking")
+        player.texture = SKTexture(imageNamed: "stand1")
+    }
+    
+    override func update(_ currentTime: TimeInterval) {
+        guard let destX = destination?.x else { return }
+        
+        let diff = destX - player.position.x
+        if abs(diff) < 2 {
+            destination = nil
+            stopWalkingAnimation()
+            player.physicsBody?.velocity.dx = 0
+            
+            // Reached button
+            if movingToButton && !buttonActive {
+                activateButton()
+            }
+            return
+        }
+        
+        let direction: CGFloat = diff > 0 ? 1 : -1
+        player.xScale = abs(player.xScale) * direction
+        player.physicsBody?.velocity.dx = direction * playerSpeed
+    }
+    
+    func activateButton() {
+        buttonActive = true
+        button.color = .green
+        movingToButton = false
+        print("Button activated!")
+        
+        // Run the function
+        runButtonFunction()
+        
+        // Schedule deactivation after a few seconds
+        let wait = SKAction.wait(forDuration: buttonActiveDuration)
+        let deactivate = SKAction.run { [weak self] in
+            self?.deactivateButton()
+        }
+        run(SKAction.sequence([wait, deactivate]))
+    }
+    
+    func deactivateButton() {
+        buttonActive = false
+        button.color = .red
+        print("Button deactivated, ready again.")
+    }
+    
+    // Typewriter effect to display text char-by-char in label
+    func typeWriterDisplay(text: String, charDelay: TimeInterval = 0.1) {
+        typingWorkItem?.cancel() // cancel previous typing if any
+        textLabel.text = ""
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            for (index, char) in text.enumerated() {
+                let delay = DispatchTime.now() + charDelay * Double(index)
+                DispatchQueue.main.asyncAfter(deadline: delay) {
+                    self.textLabel.text? += String(char)
+                }
+            }
+        }
+        typingWorkItem = workItem
+        DispatchQueue.global().async(execute: workItem)
+    }
+    
+    func runButtonFunction() {
+        // Flash background quickly
+        let fadeOut = SKAction.fadeAlpha(to: 0.2, duration: 0.2)
+        let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.2)
+        background.run(SKAction.sequence([fadeOut, fadeIn]))
+        
+        // Show typewriter text at top
+        typeWriterDisplay(text: "Button activated! Moving ahead...")
+    }
+}
+
