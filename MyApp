@@ -1,0 +1,13 @@
+import SwiftUI
+
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            HStack{
+                ContentView(player: Creature(sdmg: 1, bdmg: 1, def: 1, health: 1, speed: 1))
+                //view with amalgam displayed, will change with picker changes
+            }
+        }
+    }
+}
